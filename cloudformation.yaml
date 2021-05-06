@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Share Repository
+
+Parameters:
+
+  DomainName:
+    Description: Full domain name this service should be reachable by
+    Type: String
+
+  CertificateArn:
+    Description: Certificate ARN from region "us-east-1" to secure calls via the domain name above
+    Type: String
+    AllowedPattern: arn:aws:acm:us-east-1:.+
+    ConstraintDescription: must be located in region "us-east-1" (start with "arn:aws:acm:us-east-1:")
+
+  BucketNamePrefix:
+    Description: Prefixes the bucket name (stack name + ...) by a string
+    Type: String
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Webservice Configuration
+        Parameters:
+          - DomainName
+          - CertificateArn
+      - Label:
+          default: Storage Configuration
+        Parameters:
+          - BucketNamePrefix
+
+Resources:
+
+  Storage:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${BucketNamePrefix}${AWS::StackName}-storage"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        RoutingRules:
+          - RedirectRule:
+              HostName: !Sub ${DomainName}
+              Protocol: https
+              ReplaceKeyPrefixWith: ""
+            RoutingRuleCondition:
+              KeyPrefixEquals: app/
+  SiteDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+        - !Sub ${DomainName}
+        DefaultCacheBehavior:
+          AllowedMethods: ["GET", "HEAD"]
+          CachedMethods: ["GET", "HEAD"]
+          Compress: true
+          DefaultTTL: 0
+          ForwardedValues:
+            QueryString: true
+          TargetOriginId: Site
+          ViewerProtocolPolicy: redirect-to-https
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        Origins:
+        - DomainName: !Sub "${Storage}.s3-website.${AWS::Region}.amazonaws.com"
+          Id: Site
+          CustomOriginConfig:
+            OriginProtocolPolicy: http-only
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          MinimumProtocolVersion: TLSv1.2_2019
+          SslSupportMethod: sni-only

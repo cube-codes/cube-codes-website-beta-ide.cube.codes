@@ -1,0 +1,24 @@
+name: Create Build
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - run: |
+        version=$(cat "version")
+        bucket=cube-codes-website-beta-ide-storage
+        curl -L "https://github.com/cube-codes/cube-codes-framework/releases/download/${version}/cube-codes-ide-${version}-web.zip" -o "web.zip"
+        unzip web.zip -d web
+        aws s3 cp web s3://${bucket}/ --debug --recursive --exclude "*" --include "version/*" --acl public-read --cache-control max-age=31536000
+        aws s3 rm s3://${bucket}/ --debug --recursive --exclude "version/*"
+        aws s3 cp web s3://${bucket}/ --debug --recursive --exclude "version/*" --acl public-read
+      env:
+        AWS_DEFAULT_REGION: eu-central-1
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
